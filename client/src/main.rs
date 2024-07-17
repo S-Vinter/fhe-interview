@@ -5,7 +5,7 @@ use tokio::io::{self, AsyncReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::io::AsyncBufReadExt;
 use rand::prelude::IteratorRandom;
 
-use common::KeyValue;
+use common::{KeyValue, Request};
 
 fn xor_strings(s1: &str, s2: &str) -> Vec<u8> {
     // Convert strings to byte slices
@@ -60,13 +60,20 @@ async fn main() -> io::Result<()> {
             continue;
         }
 
-        let secret = generate_random_string(input.len());
-        let enc_value = encrypt(&secret, input);
-        secrets.insert(enc_value.clone(), secret);
-        let key_value = KeyValue{key: key.to_string(), value: enc_value};
+        let request;
+        if line.starts_with("get ") {
+            let key = line.split_whitespace().collect::<Vec<&str>>()[1];
+            request = Request::GetRequest(key.to_string());
+        } else {
+            let secret = generate_random_string(input.len());
+            let enc_value = encrypt(&secret, input);
+            secrets.insert(enc_value.clone(), secret);
+            let key_value = KeyValue{key: key.to_string(), value: enc_value};
+            request = Request::KeyValue(key_value);
+        }
 
         // Send message to the server
-        stream.write_all(&bincode::serialize::<KeyValue>(&key_value).unwrap()).await?;
+        stream.write_all(&bincode::serialize::<Request>(&request).unwrap()).await?;
 
         // // Read the response
         // let mut buf = [0; 1024];
