@@ -5,6 +5,8 @@ use tokio::io::{self, AsyncReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::io::AsyncBufReadExt;
 use rand::prelude::IteratorRandom;
 
+use common::KeyValue;
+
 fn xor_strings(s1: &str, s2: &str) -> Vec<u8> {
     // Convert strings to byte slices
     let bytes1 = s1.as_bytes();
@@ -49,6 +51,8 @@ async fn main() -> io::Result<()> {
     let reader = BufReader::new(stdin);
     let mut lines = reader.lines();
 
+    let mut key = 0;
+
     while let Some(line) = lines.next_line().await? {
         let input = line.trim();
 
@@ -59,24 +63,27 @@ async fn main() -> io::Result<()> {
         let secret = generate_random_string(input.len());
         let enc_value = encrypt(&secret, input);
         secrets.insert(enc_value.clone(), secret);
+        let key_value = KeyValue{key: key.to_string(), value: enc_value};
 
         // Send message to the server
-        stream.write_all(&enc_value).await?;
+        stream.write_all(&bincode::serialize::<KeyValue>(&key_value).unwrap()).await?;
 
-        // Read the response
-        let mut buf = [0; 1024];
-        let n = stream.read(&mut buf).await?;
-        let input_from_server = String::from_utf8_lossy(&buf[..n]);
-        println!("Received from server: {}", input_from_server);
+        // // Read the response
+        // let mut buf = [0; 1024];
+        // let n = stream.read(&mut buf).await?;
+        // let input_from_server = String::from_utf8_lossy(&buf[..n]);
+        // println!("Received from server: {}", input_from_server);
 
-        let secret = secrets.get(&input_from_server.to_string().as_bytes().to_vec()).unwrap();
-        let decrypted = decrypt(secret, &input_from_server.to_string());
-        unsafe {println!("{:?}", String::from_utf8_unchecked(decrypted));}
+        // let secret = secrets.get(&input_from_server.to_string().as_bytes().to_vec()).unwrap();
+        // let decrypted = decrypt(secret, &input_from_server.to_string());
+        // unsafe {println!("{}", String::from_utf8_unchecked(decrypted));}
+        key += 1;
 
         if input == "exit" {
             println!("Disconnecting...");
             break;
         }
+
     }
 
     Ok(())
